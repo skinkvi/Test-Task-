@@ -14,43 +14,44 @@ import (
 )
 
 func GenerateTokenPair(w http.ResponseWriter, r *http.Request, cfg config.Config) {
+	const op = "handlers.GenerateTokenPair"
 	userID := chi.URLParam(r, "userID")
 	ipAddress := r.RemoteAddr
 
-	logrus.Infof("Generating token pair for user: %s, ip: %s", userID, ipAddress)
+	logrus.Infof("%s: Generating token pair for user: %s, ip: %s", op, userID, ipAddress)
 
 	accessToken, err := GenerateAccessToken(userID, ipAddress, cfg)
 	if err != nil {
-		logrus.Errorf("Failed to generate access token for user: %s, ip: %s, err: %v", userID, ipAddress, err)
+		logrus.Errorf("%s: Failed to generate access token for user: %s, ip: %s, err: %v", op, userID, ipAddress, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	logrus.Infof("Generated access token: %s", accessToken)
+	logrus.Infof("%s: Generated access token: %s", op, accessToken)
 
 	refreshToken, err := GenerateRefreshToken(userID, ipAddress)
 	if err != nil {
-		logrus.Errorf("Failed to generate refresh token for user: %s, ip: %s, err: %v", userID, ipAddress, err)
+		logrus.Errorf("%s: Failed to generate refresh token for user: %s, ip: %s, err: %v", op, userID, ipAddress, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	logrus.Infof("Generated refresh token: %s", refreshToken)
+	logrus.Infof("%s: Generated refresh token: %s", op, refreshToken)
 
 	hashedRefreshToken, err := HashRefreshToken(refreshToken)
 	if err != nil {
-		logrus.Errorf("Failed to hash refresh token for user: %s, ip: %s, err: %v", userID, ipAddress, err)
+		logrus.Errorf("%s: Failed to hash refresh token for user: %s, ip: %s, err: %v", op, userID, ipAddress, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	logrus.Infof("Hashed refresh token: %s", hashedRefreshToken)
+	logrus.Infof("%s: Hashed refresh token: %s", op, hashedRefreshToken)
 
 	// прилошлось делать такую махинацию потому что выдавало ошибку с типом int не понял почему она была
 	var userIDInt int64
 	userIDInt, err = strconv.ParseInt(userID, 10, 64)
 	if err != nil {
-		logrus.Errorf("Failed to parse userID: %v", err)
+		logrus.Errorf("%s: Failed to parse userID: %v", op, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -62,12 +63,12 @@ func GenerateTokenPair(w http.ResponseWriter, r *http.Request, cfg config.Config
 	}
 	err = database.DB.Create(&refreshTokenRecord).Error
 	if err != nil {
-		logrus.Errorf("Failed to create refresh token record for user: %s, ip: %s, err: %v", userID, ipAddress, err)
+		logrus.Errorf("%s: Failed to create refresh token record for user: %s, ip: %s, err: %v", op, userID, ipAddress, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	logrus.Infof("Created refresh token record for user: %s, ip: %s", userID, ipAddress)
+	logrus.Infof("%s: Created refresh token record for user: %s, ip: %s", op, userID, ipAddress)
 
 	response := map[string]string{
 		"access_token":  accessToken,
@@ -76,7 +77,7 @@ func GenerateTokenPair(w http.ResponseWriter, r *http.Request, cfg config.Config
 
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
-		logrus.Errorf("Failed to serialize response json for user: %s, ip: %s, err: %v", userID, ipAddress, err)
+		logrus.Errorf("%s: Failed to serialize response json for user: %s, ip: %s, err: %v", op, userID, ipAddress, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
