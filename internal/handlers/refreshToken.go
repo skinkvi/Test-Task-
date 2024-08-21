@@ -25,15 +25,17 @@ func GenerateRefreshToken(userID, ipAddress string) (string, error) {
 }
 
 func HashRefreshToken(token string) (string, error) {
+	const op = "handlers.HashRefreshToken"
 	bytes, err := bcrypt.GenerateFromPassword([]byte(token), bcrypt.DefaultCost)
 	if err != nil {
-		log.Errorf("Error hashing refresh token: %v", err)
+		log.Errorf("%s: Error hashing refresh token: %v", op, err)
 		return "", err
 	}
 	return string(bytes), nil
 }
 
 func RefreshTokenPair(w http.ResponseWriter, r *http.Request, cfg config.Config) {
+	const op = "handlers.RefreshTokenPair"
 	refreshToken := r.Header.Get("Authorization")
 	ipAddress := r.RemoteAddr
 
@@ -41,12 +43,13 @@ func RefreshTokenPair(w http.ResponseWriter, r *http.Request, cfg config.Config)
 	database.DB.Where("token_hash = ?", refreshToken).First(&refreshTokenRecord)
 
 	if refreshTokenRecord.ID == 0 {
+		log.Errorf("%s: Invalid refresh token", op)
 		http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
 		return
 	}
 
 	if refreshTokenRecord.IPAddress != ipAddress {
-		log.Warn("IP address changed for user:", refreshTokenRecord.UserID)
+		log.Warnf("%s: IP address changed for user: %d", op, refreshTokenRecord.UserID)
 
 		user := models.User{}
 		database.DB.Model(&models.User{}).Where("id = ?", refreshTokenRecord.UserID).First(&user)
@@ -65,7 +68,7 @@ func RefreshTokenPair(w http.ResponseWriter, r *http.Request, cfg config.Config)
 
 		emailBody, err := templates.ExecuteTemplate("email-warning.html", data)
 		if err != nil {
-			log.Errorf("Failed to generate email warning: %v", err)
+			log.Errorf("%s: Failed to generate email warning: %v", op, err)
 			return
 		}
 
@@ -77,27 +80,27 @@ func RefreshTokenPair(w http.ResponseWriter, r *http.Request, cfg config.Config)
 
 		d := gomail.NewDialer("smtp.gmail.com", 587, "test@task.com", "testpassword")
 		if err := d.DialAndSend(msg); err != nil {
-			log.Errorf("Failed to send email warning: %v", err)
+			log.Errorf("%s: Failed to send email warning: %v", op, err)
 		}
 	}
 
 	accessToken, err := GenerateAccessToken(string(refreshTokenRecord.UserID), ipAddress, cfg)
 	if err != nil {
-		log.Error("Failed to generate access token:", err)
+		log.Errorf("%s: Failed to generate access token: %v", op, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
 	newRefreshToken, err := GenerateRefreshToken(string(refreshTokenRecord.UserID), ipAddress)
 	if err != nil {
-		log.Error("Failed to generate refresh token:", err)
+		log.Errorf("%s: Failed to generate refresh token: %v", op, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
 	hashedRefreshToken, err := HashRefreshToken(newRefreshToken)
 	if err != nil {
-		log.Error("Failed to hash refresh token:", err)
+		log.Errorf("%s: Failed to hash refresh token: %v", op, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -113,7 +116,7 @@ func RefreshTokenPair(w http.ResponseWriter, r *http.Request, cfg config.Config)
 
 	jsonResponse, err := json.Marshal(response)
 	if err != nil {
-		log.Errorf("Failed to serialize response json for user: %d, ip: %s, err: %v", refreshTokenRecord.UserID, ipAddress, err)
+		log.Errorf("%s: Failed to serialize response json for user: %d, ip: %s, err: %v", op, refreshTokenRecord.UserID, ipAddress, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -121,5 +124,5 @@ func RefreshTokenPair(w http.ResponseWriter, r *http.Request, cfg config.Config)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsonResponse)
-	log.Info("Refresh token refreshed successfully")
+	log.Infof("%s: Refresh token refreshed successfully", op)
 }
